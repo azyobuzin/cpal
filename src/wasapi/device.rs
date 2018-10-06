@@ -505,17 +505,13 @@ impl Device {
         }
     }
 
-    fn data_flow(&self) -> EDataFlow {
+    pub(super) fn data_flow(&self) -> EDataFlow {
         let endpoint = Endpoint::from(self.device as *const _);
         endpoint.data_flow()
     }
 
     pub fn default_input_format(&self) -> Result<Format, DefaultFormatError> {
-        if self.data_flow() == eCapture {
-            self.default_format()
-        } else {
-            Err(DefaultFormatError::StreamTypeNotSupported)
-        }
+        self.default_format()
     }
 
     pub fn default_output_format(&self) -> Result<Format, DefaultFormatError> {
