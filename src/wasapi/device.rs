@@ -458,12 +458,7 @@ impl Device {
     }
 
     pub fn supported_input_formats(&self) -> Result<SupportedInputFormats, FormatsEnumerationError> {
-        if self.data_flow() == eCapture {
-            self.supported_formats()
-        // If it's an output device, assume no input formats.
-        } else {
-            Ok(vec![].into_iter())
-        }
+        self.supported_formats()
     }
 
     pub fn supported_output_formats(&self) -> Result<SupportedOutputFormats, FormatsEnumerationError> {
