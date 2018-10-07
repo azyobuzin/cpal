@@ -5,7 +5,7 @@ use super::winapi::shared::basetsd::UINT32;
 use super::winapi::shared::ksmedia;
 use super::winapi::shared::minwindef::{BYTE, DWORD, FALSE, WORD};
 use super::winapi::shared::mmreg;
-use super::winapi::um::audioclient::{self, AUDCLNT_E_DEVICE_INVALIDATED};
+use super::winapi::um::audioclient::{self, AUDCLNT_E_DEVICE_INVALIDATED, AUDCLNT_S_BUFFER_EMPTY};
 use super::winapi::um::audiosessiontypes::{AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, AUDCLNT_STREAMFLAGS_LOOPBACK};
 use super::winapi::um::handleapi;
 use super::winapi::um::mmdeviceapi::eRender;
@@ -533,37 +533,40 @@ impl EventLoop {
                                ptr::null_mut(),
                             );
                             check_result(hresult).unwrap();
-                            debug_assert!(!buffer.is_null());
-                            let buffer_len = frames_available as usize 
-                                * stream.bytes_per_frame as usize / sample_size;
 
-                            // Simplify the capture callback sample format branches.
-                            macro_rules! capture_callback {
-                                ($T:ty, $Variant:ident) => {{
-                                    let buffer_data = buffer as *mut _ as *const $T;
-                                    let slice = slice::from_raw_parts(buffer_data, buffer_len);
-                                    let input_buffer = InputBuffer { buffer: slice };
-                                    let unknown_buffer = UnknownTypeInputBuffer::$Variant(::InputBuffer {
-                                        buffer: Some(input_buffer),
-                                    });
-                                    let data = StreamData::Input { buffer: unknown_buffer };
-                                    callback(stream_id, data);
+                            if hresult != AUDCLNT_S_BUFFER_EMPTY {
+                                debug_assert!(!buffer.is_null());
+                                let buffer_len = frames_available as usize 
+                                    * stream.bytes_per_frame as usize / sample_size;
 
-                                    // Release the buffer.
-                                    let hresult = (*capture_client).ReleaseBuffer(frames_available);
-                                    match check_result(hresult) {
-                                        // Ignoring unavailable device error.
-                                        Err(ref e) if e.raw_os_error() == Some(AUDCLNT_E_DEVICE_INVALIDATED) => {
-                                        },
-                                        e => e.unwrap(),
-                                    };
-                                }};
-                            }
+                                // Simplify the capture callback sample format branches.
+                                macro_rules! capture_callback {
+                                    ($T:ty, $Variant:ident) => {{
+                                        let buffer_data = buffer as *mut _ as *const $T;
+                                        let slice = slice::from_raw_parts(buffer_data, buffer_len);
+                                        let input_buffer = InputBuffer { buffer: slice };
+                                        let unknown_buffer = UnknownTypeInputBuffer::$Variant(::InputBuffer {
+                                            buffer: Some(input_buffer),
+                                        });
+                                        let data = StreamData::Input { buffer: unknown_buffer };
+                                        callback(stream_id, data);
 
-                            match stream.sample_format {
-                                SampleFormat::F32 => capture_callback!(f32, F32),
-                                SampleFormat::I16 => capture_callback!(i16, I16),
-                                SampleFormat::U16 => capture_callback!(u16, U16),
+                                        // Release the buffer.
+                                        let hresult = (*capture_client).ReleaseBuffer(frames_available);
+                                        match check_result(hresult) {
+                                            // Ignoring unavailable device error.
+                                            Err(ref e) if e.raw_os_error() == Some(AUDCLNT_E_DEVICE_INVALIDATED) => {
+                                            },
+                                            e => e.unwrap(),
+                                        };
+                                    }};
+                                }
+
+                                match stream.sample_format {
+                                    SampleFormat::F32 => capture_callback!(f32, F32),
+                                    SampleFormat::I16 => capture_callback!(i16, I16),
+                                    SampleFormat::U16 => capture_callback!(u16, U16),
+                                }
                             }
                         },
 
