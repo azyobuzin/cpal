@@ -92,6 +92,7 @@ impl Device {
         ) {
             -2 |
             -16 /* determined empirically */ => return Err(FormatsEnumerationError::DeviceNotAvailable),
+            -22 => return Ok(Vec::new().into_iter()), // couln't open with the specified stream type
             e => check_errors(e).expect("device not available")
         }
 
