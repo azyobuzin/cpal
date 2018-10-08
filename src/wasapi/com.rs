@@ -9,9 +9,11 @@ use super::winapi::um::combaseapi::{CoInitializeEx, CoUninitialize};
 thread_local!(static COM_INITIALIZED: ComInitialized = {
     unsafe {
         // this call can fail if another library initialized COM in single-threaded mode
-        // handling this situation properly would make the API more annoying, so we just don't care
-        check_result(CoInitializeEx(ptr::null_mut(), COINIT_MULTITHREADED)).unwrap();
-        ComInitialized(ptr::null_mut())
+        let result = check_result(CoInitializeEx(ptr::null_mut(), COINIT_MULTITHREADED));
+        ComInitialized {
+            initialized: result.is_ok(),
+            _marker: ptr::null_mut(),
+        }
     }
 });
 
@@ -19,12 +21,17 @@ thread_local!(static COM_INITIALIZED: ComInitialized = {
 ///
 // We store a raw pointer because it's the only way at the moment to remove `Send`/`Sync` from the
 // object.
-struct ComInitialized(*mut ());
+struct ComInitialized {
+    initialized: bool,
+    _marker: *mut (),
+}
 
 impl Drop for ComInitialized {
     #[inline]
     fn drop(&mut self) {
-        unsafe { CoUninitialize() };
+        if self.initialized {
+            unsafe { CoUninitialize() };
+        }
     }
 }
 
